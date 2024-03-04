@@ -8,9 +8,9 @@ use crate::KeyMap;
 
 /// Emacs keybindings for `Editor`. This is the default for `Context::read_line()`.
 ///
-/// ```
+/// ```no_run
 /// use liner::{Context, KeyBindings};
-/// let mut context = Context::new();
+/// let mut context = Context::new().unwrap();
 /// context.key_bindings = KeyBindings::Emacs;
 /// ```
 #[derive(Default)]

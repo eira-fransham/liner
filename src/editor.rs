@@ -6,7 +6,7 @@ use termion::{self, clear, color, cursor};
 
 use super::complete::Completer;
 use crate::context::ColorClosure;
-use crate::{event::*, util, Buffer, EditorContext, Tty, TtyOut};
+use crate::{event::*, util, Buffer, EditorContext, Tty};
 use itertools::Itertools;
 
 /// Indicates the mode that should be currently displayed in the propmpt.
@@ -264,7 +264,7 @@ impl<C: EditorContext> Editor<C> {
         } = prompt;
 
         {
-            let mut out = context.terminal_mut().stdout()?;
+            let out = context.terminal_mut();
             out.write_all("⏎".as_bytes())?;
             for _ in 0..(out.width().unwrap_or(80) - 1) {
                 out.write_all(b" ")?; // if the line is not empty, overflow on next line
@@ -369,7 +369,7 @@ impl<C: EditorContext> Editor<C> {
         } else {
             self.cursor = cur_buf!(self).num_chars();
             self.display_impl(false)?;
-            self.context.terminal_mut().stdout()?.write_all(b"\r\n")?;
+            self.context.terminal_mut().write_all(b"\r\n")?;
             self.show_completions_hint = None;
             Ok(true)
         }
@@ -450,7 +450,7 @@ impl<C: EditorContext> Editor<C> {
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
-        self.context.terminal_mut().stdout()?.flush()
+        self.context.terminal_mut().flush()
     }
 
     /// Attempts to undo an action on the current buffer.
@@ -1158,7 +1158,7 @@ impl<C: EditorContext> Editor<C> {
 
         {
             write!(&mut self.context, "{}", out_buf).map_err(io::Error::other)?;
-            let mut out = self.context.terminal_mut().stdout()?;
+            let out = self.context.terminal_mut();
             out.write_all(out_buf.as_bytes())?;
             out.flush()
         }

@@ -2,12 +2,14 @@ use super::*;
 use context;
 
 use std::{
-    env, fs,
+    env, fmt, fs,
     io::{self, BufRead, BufReader, Write},
 };
 
 #[derive(Default)]
-pub struct TestTty;
+pub struct TestTty {
+    stdout: Vec<u8>,
+}
 
 pub enum NoStdin {}
 
@@ -19,22 +21,35 @@ impl Iterator for NoStdin {
     }
 }
 
-impl TtyOut for Vec<u8> {
+impl Tty for TestTty {
+    fn next_key(&mut self) -> Option<io::Result<Key>> {
+        None
+    }
+
     fn width(&self) -> io::Result<usize> {
         Ok(80)
     }
 }
 
-impl Tty for TestTty {
-    type Stdin<'a> = NoStdin;
-    type Stdout<'a> = Vec<u8>;
-
-    fn stdin(&mut self) -> Self::Stdin<'_> {
-        unreachable!()
+impl io::Write for TestTty {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.stdout.write(buf)
     }
 
-    fn stdout(&mut self) -> std::io::Result<Self::Stdout<'_>> {
-        Ok(Vec::new())
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        self.stdout.write_vectored(bufs)
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.stdout.write_all(buf)
+    }
+
+    fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> io::Result<()> {
+        self.stdout.write_fmt(fmt)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stdout.flush()
     }
 }
 

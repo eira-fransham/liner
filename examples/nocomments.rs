@@ -54,7 +54,7 @@ impl Completer for NoCommentCompleter {
 }
 
 fn main() {
-    let mut con = Context::new();
+    let mut con = Context::new().unwrap();
     let mut completer = NoCommentCompleter { inner: None };
 
     let history_file = match args().nth(1) {

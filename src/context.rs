@@ -1,6 +1,6 @@
 use std::{
     fmt,
-    io::{self, stdin, stdout},
+    io::{self, Stdin, Stdout},
 };
 use termion::{
     event::Key,
@@ -54,41 +54,55 @@ pub enum KeyBindings {
     Emacs,
 }
 
-#[derive(Default, Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct DefaultTty;
+pub struct DefaultTty {
+    stdin: Keys<Stdin>,
+    stdout: RawTerminal<Stdout>,
+}
 
-pub trait TtyOut: io::Write {
+impl DefaultTty {
+    pub fn new() -> io::Result<Self> {
+        let stdin = io::stdin().keys();
+        let stdout = io::stdout().into_raw_mode()?;
+
+        Ok(Self { stdin, stdout })
+    }
+}
+
+// TODO: Maybe better to take `Stdin` out of this entirely and just have a `next_key` function
+pub trait Tty: io::Write {
+    fn next_key(&mut self) -> Option<io::Result<Key>>;
     fn width(&self) -> io::Result<usize>;
 }
 
-impl TtyOut for RawTerminal<io::Stdout> {
+impl Tty for DefaultTty {
+    fn next_key(&mut self) -> Option<io::Result<Key>> {
+        self.stdin.next()
+    }
+
     fn width(&self) -> io::Result<usize> {
         util::terminal_width()
     }
 }
 
-pub trait Tty {
-    type Stdin<'a>: Iterator<Item = io::Result<Key>> + 'a
-    where
-        Self: 'a;
-    type Stdout<'a>: TtyOut + 'a
-    where
-        Self: 'a;
-
-    fn stdin(&mut self) -> Self::Stdin<'_>;
-    fn stdout(&mut self) -> io::Result<Self::Stdout<'_>>;
-}
-
-impl Tty for DefaultTty {
-    type Stdin<'a> = Keys<io::Stdin>;
-    type Stdout<'a> = RawTerminal<io::Stdout>;
-
-    fn stdin(&mut self) -> Self::Stdin<'_> {
-        stdin().keys()
+impl io::Write for DefaultTty {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.stdout.write(buf)
     }
 
-    fn stdout(&mut self) -> io::Result<Self::Stdout<'_>> {
-        stdout().into_raw_mode()
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        self.stdout.write_vectored(bufs)
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.stdout.write_all(buf)
+    }
+
+    fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> io::Result<()> {
+        self.stdout.write_fmt(fmt)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stdout.flush()
     }
 }
 
@@ -147,7 +161,7 @@ pub trait EditorContext: fmt::Write {
     ///     }
     /// }
     ///
-    /// let mut context = Context::new();
+    /// let mut context = Context::new().unwrap();
     /// let line =
     ///     context.read_line_with_init_buffer(Prompt::from("[prompt]$ "),
     ///                                        &mut EmptyCompleter,
@@ -187,8 +201,7 @@ pub trait EditorContext: fmt::Write {
     {
         keymap.init(&mut ed)?;
         loop {
-            // TODO: Inefficient to re-take access to stdin every iteration
-            let key = ed.context_mut().terminal_mut().stdin().next();
+            let key = ed.context_mut().terminal_mut().next_key();
 
             if let Some(key) = key {
                 if keymap.handle_key(key?, &mut ed, handler)? {
@@ -282,8 +295,8 @@ impl<T: Default> Default for Context<T> {
 }
 
 impl Context {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new() -> io::Result<Self> {
+        Ok(Self::with_terminal(DefaultTty::new()?))
     }
 }
 

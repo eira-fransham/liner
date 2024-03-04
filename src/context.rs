@@ -12,7 +12,7 @@ use super::*;
 use crate::editor::Prompt;
 use keymap;
 
-pub type ColorClosure = Box<dyn Fn(&str) -> String>;
+pub type ColorClosure = Box<dyn Fn(&str) -> String + Send + Sync + 'static>;
 
 /// The default for `Context.word_divider_fn`.
 pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {

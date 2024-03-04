@@ -1,20 +1,54 @@
 use super::*;
 use context;
 
-use std::env;
-use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::{
+    env, fs,
+    io::{self, BufRead, BufReader, Write},
+};
+
+#[derive(Default)]
+pub struct TestTty;
+
+pub enum NoStdin {}
+
+impl Iterator for NoStdin {
+    type Item = io::Result<termion::event::Key>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unreachable!()
+    }
+}
+
+impl TtyOut for Vec<u8> {
+    fn width(&self) -> io::Result<usize> {
+        Ok(80)
+    }
+}
+
+impl Tty for TestTty {
+    type Stdin = NoStdin;
+    type Stdout = Vec<u8>;
+
+    fn stdin(&mut self) -> Self::Stdin {
+        unreachable!()
+    }
+
+    fn stdout(&mut self) -> std::io::Result<Self::Stdout> {
+        Ok(Vec::new())
+    }
+}
 
 fn assert_cursor_pos(s: &str, cursor: usize, expected_pos: CursorPosition) {
     let buf = Buffer::from(s.to_owned());
     let words = context::get_buffer_words(&buf);
-    let pos = CursorPosition::get(cursor, &words[..]);
+    let pos = CursorPosition::get(cursor, words);
     assert!(
         expected_pos == pos,
-        format!(
-            "buffer: {:?}, cursor: {}, expected pos: {:?}, pos: {:?}",
-            s, cursor, expected_pos, pos
-        )
+        "buffer: {:?}, cursor: {}, expected pos: {:?}, pos: {:?}",
+        s,
+        cursor,
+        expected_pos,
+        pos
     );
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "redox_liner"
-version = "0.5.2" # remember to update README
+version = "0.6" # remember to update README
 authors = [
     "MovingtoMars <definitelynotliam@gmail.com>",
     "Michael Aaron Murphy <mmstickman@gmail.com>",
@@ -16,7 +16,8 @@ exclude = [
     "CONTRIBUTING.md",
     ".travis.yml",
 ]
-edition = "2018"
+edition = "2021"
+resolver = "2"
 
 [lib]
 name = "liner"

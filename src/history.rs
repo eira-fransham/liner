@@ -15,6 +15,7 @@ use std::{
 const DEFAULT_MAX_SIZE: usize = 1000;
 
 /// Structure encapsulating command history
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct History {
     // TODO: this should eventually be private
     /// Vector of buffers to store history in

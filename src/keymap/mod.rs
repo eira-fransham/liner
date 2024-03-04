@@ -1,22 +1,23 @@
 use crate::complete::Completer;
 use crate::event::*;
 use crate::Editor;
-use std::io::{self, ErrorKind, Write};
+use crate::EditorContext;
+use std::io::{self, ErrorKind};
 use termion::event::Key;
 
 pub trait KeyMap: Default {
-    fn handle_key_core<'a, W: Write>(
+    fn handle_key_core<C: EditorContext>(
         &mut self,
         key: Key,
-        editor: &mut Editor<'a, W>,
+        editor: &mut Editor<C>,
     ) -> io::Result<()>;
 
-    fn init<'a, W: Write>(&mut self, _editor: &mut Editor<'a, W>) {}
+    fn init<C: EditorContext>(&mut self, _editor: &mut Editor<C>) -> io::Result<()> { Ok(()) }
 
-    fn handle_key<'a, W: Write, C: Completer>(
+    fn handle_key<Ctx: EditorContext, C: Completer>(
         &mut self,
         mut key: Key,
-        editor: &mut Editor<'a, W>,
+        editor: &mut Editor<Ctx>,
         handler: &mut C,
     ) -> io::Result<bool> {
         let mut done = false;
@@ -91,10 +92,10 @@ mod tests {
     struct TestKeyMap;
 
     impl KeyMap for TestKeyMap {
-        fn handle_key_core<'a, W: Write>(
+        fn handle_key_core<C: EditorContext>(
             &mut self,
             _: Key,
-            _: &mut Editor<'a, W>,
+            _: &mut Editor<C>,
         ) -> io::Result<()> {
             Ok(())
         }
@@ -111,9 +112,8 @@ mod tests {
     #[test]
     /// when the current buffer is empty, ctrl-d generates and eof error
     fn ctrl_d_empty() {
-        let mut context = Context::new();
-        let out = Vec::new();
-        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
+        let mut context = Context::test();
+        let mut ed = Editor::new(Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = TestKeyMap;
 
         let res = map.handle_key(Ctrl('d'), &mut ed, &mut EmptyCompleter);
@@ -124,9 +124,8 @@ mod tests {
     #[test]
     /// when the current buffer is not empty, ctrl-d should be ignored
     fn ctrl_d_non_empty() {
-        let mut context = Context::new();
-        let out = Vec::new();
-        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
+        let mut context = Context::test();
+        let mut ed = Editor::new(Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = TestKeyMap;
         ed.insert_str_after_cursor("not empty").unwrap();
 
@@ -137,9 +136,8 @@ mod tests {
     #[test]
     /// ctrl-c should generate an error
     fn ctrl_c() {
-        let mut context = Context::new();
-        let out = Vec::new();
-        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
+        let mut context = Context::test();
+        let mut ed = Editor::new(Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = TestKeyMap;
 
         let res = map.handle_key(Ctrl('c'), &mut ed, &mut EmptyCompleter);

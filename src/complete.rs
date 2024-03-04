@@ -1,10 +1,11 @@
+use crate::EditorContext;
+
 use super::event::Event;
-use std::io::Write;
 use std::path::PathBuf;
 
 pub trait Completer {
     fn completions(&mut self, start: &str) -> Vec<String>;
-    fn on_event<W: Write>(&mut self, _event: Event<W>) {}
+    fn on_event<C: EditorContext>(&mut self, _event: Event<C>) {}
 }
 
 pub struct BasicCompleter {
@@ -90,11 +91,9 @@ impl Completer for FilenameCompleter {
             {
                 p = parent;
                 start_name = if self.case_sensitive {
-                    full_path.file_name().unwrap().to_string_lossy()
+                    full_path.file_name().unwrap().to_string_lossy().into_owned()
                 } else {
-                    let sn = full_path.file_name().unwrap().to_string_lossy();
-                    sn.to_lowercase();
-                    sn
+                    full_path.file_name().unwrap().to_string_lossy().to_lowercase()
                 };
                 completing_dir = false;
             }

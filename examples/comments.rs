@@ -4,9 +4,8 @@ extern crate termion;
 
 use std::env::{args, current_dir};
 use std::io;
-use std::mem::replace;
 
-use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
+use liner::{Completer, CursorPosition, Event, EventKind, FilenameCompleter, Prompt, EditorContext, Context};
 use regex::Regex;
 use termion::color;
 
@@ -30,7 +29,7 @@ impl Completer for CommentCompleter {
         }
     }
 
-    fn on_event<W: std::io::Write>(&mut self, event: Event<W>) {
+    fn on_event<C: EditorContext>(&mut self, event: Event<C>) {
         if let EventKind::BeforeComplete = event.kind {
             let (_, pos) = event.editor.get_words_and_cursor_position();
 
@@ -58,10 +57,10 @@ impl Completer for CommentCompleter {
             // word to the left
             if filename {
                 let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                replace(&mut self.inner, Some(completer));
+                self.inner = Some(completer);
             } else {
                 // Delete the completer
-                replace(&mut self.inner, None);
+                self.inner = None;
             }
         }
     }

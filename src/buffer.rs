@@ -4,7 +4,7 @@ use std::iter::FromIterator;
 use unicode_width::UnicodeWidthStr;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
-#[derive(Debug, Clone)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Action {
     Insert { start: usize, text: Vec<char> },
     Remove { start: usize, text: Vec<char> },
@@ -37,7 +37,7 @@ impl Action {
 /// A buffer for text in the line editor.
 ///
 /// It keeps track of each action performed on it for use with undo/redo.
-#[derive(Debug, Clone)]
+#[derive(Clone, Hash, Debug)]
 pub struct Buffer {
     data: Vec<char>,
     actions: Vec<Action>,

@@ -994,7 +994,7 @@ impl<C: EditorContext> Editor<C> {
                     hplace,
                     self.history_subset_index.len()
                 ),
-                strip(&prefix).unwrap().len() + 9,
+                strip(&prefix).len() + 9,
             )
         } else {
             (self.prompt.to_string(), 0)

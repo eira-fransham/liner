@@ -21,6 +21,8 @@ pub use history::*;
 mod keymap;
 pub use keymap::*;
 
+pub use termion::event::Key;
+
 mod util;
 
 #[cfg(test)]

@@ -1,5 +1,4 @@
-use std::{io,
-cmp, mem};
+use std::{cmp, io, mem};
 use termion::event::Key;
 
 use crate::buffer::Buffer;

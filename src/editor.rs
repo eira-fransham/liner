@@ -1,6 +1,6 @@
 use std::fmt::{self, Write};
 use std::io::{self, Write as _};
-use std::{cmp, iter};
+use std::{cmp, iter, mem};
 use strip_ansi_escapes::strip;
 use termion::{self, clear, color, cursor};
 
@@ -138,10 +138,7 @@ pub enum CursorPosition {
 
 impl CursorPosition {
     /// Get the word position, given an iterator of word separators
-    pub fn get<I: IntoIterator<Item = (usize, usize)>>(
-        cursor: usize,
-        words: I,
-    ) -> CursorPosition {
+    pub fn get<I: IntoIterator<Item = (usize, usize)>>(cursor: usize, words: I) -> CursorPosition {
         use CursorPosition::*;
 
         let mut words = words.into_iter();
@@ -173,9 +170,8 @@ impl CursorPosition {
 }
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
-pub struct Editor<C: EditorContext + ?Sized> {
+pub struct Editor<C: ?Sized> {
     prompt: Prompt,
-    out: <C::Terminal as Tty>::Stdout,
 
     // A closure that is evaluated just before we write to out.
     // This allows us to do custom syntax highlighting and other fun stuff.
@@ -262,25 +258,28 @@ impl<C: EditorContext> Editor<C> {
         mut context: C,
         buffer: B,
     ) -> io::Result<Self> {
-        let mut out = context.terminal_mut().stdout()?;
-        out.write_all("⏎".as_bytes())?;
-        for _ in 0..(out.width().unwrap_or(80) - 1) {
-            out.write_all(b" ")?; // if the line is not empty, overflow on next line
-        }
-        out.write_all("\r \r".as_bytes())?; // Erase the "⏎" if nothing overwrites it
         let Prompt {
             mut prompt,
             vi_status,
         } = prompt;
-        out.write_all(prompt.split('\n').join("\r\n").as_bytes())?;
-        if let Some(index) = prompt.rfind('\n') {
-            prompt = prompt.split_at(index + 1).1.into()
+
+        {
+            let mut out = context.terminal_mut().stdout()?;
+            out.write_all("⏎".as_bytes())?;
+            for _ in 0..(out.width().unwrap_or(80) - 1) {
+                out.write_all(b" ")?; // if the line is not empty, overflow on next line
+            }
+            out.write_all("\r \r".as_bytes())?; // Erase the "⏎" if nothing overwrites it
+            out.write_all(prompt.split('\n').join("\r\n").as_bytes())?;
+            if let Some(index) = prompt.rfind('\n') {
+                prompt = prompt.split_at(index + 1).1.into()
+            }
         }
+
         let prompt = Prompt { prompt, vi_status };
         let mut ed = Editor {
             prompt,
             cursor: 0,
-            out,
             closure: f,
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
@@ -350,14 +349,6 @@ impl<C: EditorContext> Editor<C> {
         self.cursor
     }
 
-    pub fn stdout(&self) -> &<C::Terminal as Tty>::Stdout {
-        &self.out
-    }
-
-    pub fn stdout_mut(&mut self) -> &mut <C::Terminal as Tty>::Stdout {
-        &mut self.out
-    }
-
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
     pub fn handle_newline(&mut self) -> io::Result<bool> {
         self.history_fresh = false;
@@ -378,7 +369,7 @@ impl<C: EditorContext> Editor<C> {
         } else {
             self.cursor = cur_buf!(self).num_chars();
             self.display_impl(false)?;
-            self.out.write_all(b"\r\n")?;
+            self.context.terminal_mut().stdout()?.write_all(b"\r\n")?;
             self.show_completions_hint = None;
             Ok(true)
         }
@@ -459,7 +450,7 @@ impl<C: EditorContext> Editor<C> {
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
-        self.out.flush()
+        self.context.terminal_mut().stdout()?.flush()
     }
 
     /// Attempts to undo an action on the current buffer.
@@ -528,7 +519,8 @@ impl<C: EditorContext> Editor<C> {
                     "{}{}",
                     color::Black.fg_str(),
                     color::White.bg_str()
-                ).map_err(io::Error::other)?;
+                )
+                .map_err(io::Error::other)?;
             }
             write!(output_buf, "{:<1$}", com, col_width).map_err(io::Error::other)?;
             if Some(index) == highlighted {
@@ -537,7 +529,8 @@ impl<C: EditorContext> Editor<C> {
                     "{}{}",
                     color::Reset.bg_str(),
                     color::Reset.fg_str()
-                ).map_err(io::Error::other)?;
+                )
+                .map_err(io::Error::other)?;
             }
 
             i += 1;
@@ -660,12 +653,8 @@ impl<C: EditorContext> Editor<C> {
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
-        write!(
-            &mut self.context,
-            "{}{}",
-            clear::All,
-            cursor::Goto(1, 1)
-        ).map_err(io::Error::other)?;
+        write!(&mut self.context, "{}{}", clear::All, cursor::Goto(1, 1))
+            .map_err(io::Error::other)?;
 
         self.term_cursor_line = 1;
         self.clear_search();
@@ -1064,11 +1053,8 @@ impl<C: EditorContext> Editor<C> {
 
         // Move the term cursor to the same line as the prompt.
         if self.term_cursor_line > 1 {
-            write!(
-                out_buf,
-                "{}",
-                cursor::Up(self.term_cursor_line as u16 - 1)
-            ).map_err(io::Error::other)?;
+            write!(out_buf, "{}", cursor::Up(self.term_cursor_line as u16 - 1))
+                .map_err(io::Error::other)?;
         }
 
         write!(&mut out_buf, "\r{}", clear::AfterCursor).map_err(io::Error::other)?;
@@ -1076,8 +1062,7 @@ impl<C: EditorContext> Editor<C> {
         // If we're cycling through completions, show those
         let mut completion_lines = 0;
         if let Some((completions, i)) = self.show_completions_hint.as_ref() {
-            completion_lines =
-                1 + Self::print_completion_list(completions, *i, &mut out_buf)?;
+            completion_lines = 1 + Self::print_completion_list(completions, *i, &mut out_buf)?;
             out_buf.push_str("\r\n");
         }
 
@@ -1097,11 +1082,8 @@ impl<C: EditorContext> Editor<C> {
         let lines_len = lines.len();
         for (i, line) in lines.into_iter().enumerate() {
             if i > 0 {
-                write!(
-                    out_buf,
-                    "{}",
-                    cursor::Right(prompt_width as u16)
-                ).map_err(io::Error::other)?;
+                write!(out_buf, "{}", cursor::Right(prompt_width as u16))
+                    .map_err(io::Error::other)?;
             }
 
             if buf_num_remaining_bytes == 0 {
@@ -1153,11 +1135,8 @@ impl<C: EditorContext> Editor<C> {
         // to the line where the true cursor is.
         let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
         if cursor_line_diff > 0 {
-            write!(
-                &mut out_buf,
-                "{}",
-                cursor::Up(cursor_line_diff as u16)
-            ).map_err(io::Error::other)?;
+            write!(&mut out_buf, "{}", cursor::Up(cursor_line_diff as u16))
+                .map_err(io::Error::other)?;
         } else if cursor_line_diff < 0 {
             unreachable!();
         }
@@ -1168,24 +1147,18 @@ impl<C: EditorContext> Editor<C> {
             - new_total_width_to_cursor as isize
             - cursor_line_diff * terminal_width as isize;
         if cursor_col_diff > 0 {
-            write!(
-                &mut out_buf,
-                "{}",
-                cursor::Left(cursor_col_diff as u16)
-            ).map_err(io::Error::other)?;
+            write!(&mut out_buf, "{}", cursor::Left(cursor_col_diff as u16))
+                .map_err(io::Error::other)?;
         } else if cursor_col_diff < 0 {
-            write!(
-                &mut out_buf,
-                "{}",
-                cursor::Right((-cursor_col_diff) as u16)
-            ).map_err(io::Error::other)?;
+            write!(&mut out_buf, "{}", cursor::Right((-cursor_col_diff) as u16))
+                .map_err(io::Error::other)?;
         }
 
         self.term_cursor_line += completion_lines;
 
         {
-            let out = &mut self.out;
             write!(&mut self.context, "{}", out_buf).map_err(io::Error::other)?;
+            let mut out = self.context.terminal_mut().stdout()?;
             out.write_all(out_buf.as_bytes())?;
             out.flush()
         }
@@ -1211,6 +1184,21 @@ impl<C: EditorContext> Editor<C> {
         if let Some(status) = &mut self.prompt.vi_status {
             status.mode = mode;
         }
+    }
+
+    /// Remove and return the current buffer of commands to execute
+    pub fn take_exec_buffer(&mut self) -> String {
+        mem::take(match self.cur_history_loc {
+            Some(i) => {
+                if self.hist_buf_valid {
+                    &mut self.hist_buf
+                } else {
+                    &mut self.context.history_mut()[i]
+                }
+            }
+            _ => &mut self.new_buf,
+        })
+        .into()
     }
 }
 

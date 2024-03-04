@@ -91,9 +91,17 @@ impl Completer for FilenameCompleter {
             {
                 p = parent;
                 start_name = if self.case_sensitive {
-                    full_path.file_name().unwrap().to_string_lossy().into_owned()
+                    full_path
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
                 } else {
-                    full_path.file_name().unwrap().to_string_lossy().to_lowercase()
+                    full_path
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_lowercase()
                 };
                 completing_dir = false;
             }

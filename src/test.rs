@@ -26,14 +26,14 @@ impl TtyOut for Vec<u8> {
 }
 
 impl Tty for TestTty {
-    type Stdin = NoStdin;
-    type Stdout = Vec<u8>;
+    type Stdin<'a> = NoStdin;
+    type Stdout<'a> = Vec<u8>;
 
-    fn stdin(&mut self) -> Self::Stdin {
+    fn stdin(&mut self) -> Self::Stdin<'_> {
         unreachable!()
     }
 
-    fn stdout(&mut self) -> std::io::Result<Self::Stdout> {
+    fn stdout(&mut self) -> std::io::Result<Self::Stdout<'_>> {
         Ok(Vec::new())
     }
 }

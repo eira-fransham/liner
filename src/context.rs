@@ -1,4 +1,7 @@
-use std::{fmt, io::{self, stdin, stdout}};
+use std::{
+    fmt,
+    io::{self, stdin, stdout},
+};
 use termion::{
     event::Key,
     input::{Keys, TermRead},
@@ -65,22 +68,26 @@ impl TtyOut for RawTerminal<io::Stdout> {
 }
 
 pub trait Tty {
-    type Stdin: Iterator<Item = io::Result<Key>>;
-    type Stdout: TtyOut;
+    type Stdin<'a>: Iterator<Item = io::Result<Key>> + 'a
+    where
+        Self: 'a;
+    type Stdout<'a>: TtyOut + 'a
+    where
+        Self: 'a;
 
-    fn stdin(&mut self) -> Self::Stdin;
-    fn stdout(&mut self) -> io::Result<Self::Stdout>;
+    fn stdin(&mut self) -> Self::Stdin<'_>;
+    fn stdout(&mut self) -> io::Result<Self::Stdout<'_>>;
 }
 
 impl Tty for DefaultTty {
-    type Stdin = Keys<io::Stdin>;
-    type Stdout = RawTerminal<io::Stdout>;
+    type Stdin<'a> = Keys<io::Stdin>;
+    type Stdout<'a> = RawTerminal<io::Stdout>;
 
-    fn stdin(&mut self) -> Self::Stdin {
+    fn stdin(&mut self) -> Self::Stdin<'_> {
         stdin().keys()
     }
 
-    fn stdout(&mut self) -> io::Result<Self::Stdout> {
+    fn stdout(&mut self) -> io::Result<Self::Stdout<'_>> {
         stdout().into_raw_mode()
     }
 }
@@ -120,7 +127,10 @@ pub trait EditorContext: fmt::Write {
         prompt: Prompt,
         f: Option<ColorClosure>,
         handler: &mut C,
-    ) -> io::Result<String> where Self: Sized {
+    ) -> io::Result<String>
+    where
+        Self: Sized,
+    {
         self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
     }
 
@@ -145,7 +155,7 @@ pub trait EditorContext: fmt::Write {
     ///                                        "some initial buffer");
     /// ```
     fn read_line_with_init_buffer<B: Into<Buffer>, C: Completer>(
-        mut self,
+        self,
         prompt: Prompt,
         handler: &mut C,
         f: Option<ColorClosure>,
@@ -155,21 +165,19 @@ pub trait EditorContext: fmt::Write {
         Self: Sized,
     {
         let keybindings = self.key_bindings();
-        let stdin = self.terminal_mut().stdin();
 
         let ed = Editor::new_with_init_buffer(prompt, f, self, buffer)?;
 
         match keybindings {
-            KeyBindings::Emacs => Self::handle_keys(stdin, keymap::Emacs::new(), ed, handler),
-            KeyBindings::Vi => Self::handle_keys(stdin, keymap::Vi::new(), ed, handler),
+            KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
+            KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
         }
 
         // TODO: Why is this commented?
         //self.revert_all_history();
     }
 
-    fn handle_keys<M: KeyMap, C: Completer>(
-        stdin: <Self::Terminal as Tty>::Stdin,
+    fn handle_keys<'a, M: KeyMap, C: Completer>(
         mut keymap: M,
         mut ed: Editor<Self>,
         handler: &mut C,
@@ -178,8 +186,15 @@ pub trait EditorContext: fmt::Write {
         Self: Sized,
     {
         keymap.init(&mut ed)?;
-        for c in stdin {
-            if keymap.handle_key(c?, &mut ed, handler)? {
+        loop {
+            // TODO: Inefficient to re-take access to stdin every iteration
+            let key = ed.context_mut().terminal_mut().stdin().next();
+
+            if let Some(key) = key {
+                if keymap.handle_key(key?, &mut ed, handler)? {
+                    break;
+                }
+            } else {
                 break;
             }
         }
@@ -221,7 +236,6 @@ impl<C: EditorContext> EditorContext for &'_ mut C {
     fn key_bindings(&self) -> KeyBindings {
         (&**self).key_bindings()
     }
-
 }
 
 impl<T, F> fmt::Write for Context<T, F> {
@@ -259,7 +273,6 @@ impl<T: Tty, F: Fn(&Buffer) -> Vec<(usize, usize)>> EditorContext for Context<T,
     fn key_bindings(&self) -> KeyBindings {
         self.key_bindings
     }
-
 }
 
 impl<T: Default> Default for Context<T> {

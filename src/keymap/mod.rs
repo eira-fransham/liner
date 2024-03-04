@@ -12,7 +12,9 @@ pub trait KeyMap: Default {
         editor: &mut Editor<C>,
     ) -> io::Result<()>;
 
-    fn init<C: EditorContext>(&mut self, _editor: &mut Editor<C>) -> io::Result<()> { Ok(()) }
+    fn init<C: EditorContext>(&mut self, _editor: &mut Editor<C>) -> io::Result<()> {
+        Ok(())
+    }
 
     fn handle_key<Ctx: EditorContext, C: Completer>(
         &mut self,

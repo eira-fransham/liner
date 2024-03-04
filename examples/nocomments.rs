@@ -5,7 +5,9 @@ extern crate termion;
 use std::env::{args, current_dir};
 use std::io;
 
-use liner::{Completer, CursorPosition, Event, EventKind, FilenameCompleter, Prompt, EditorContext, Context};
+use liner::{
+    Completer, Context, CursorPosition, EditorContext, Event, EventKind, FilenameCompleter, Prompt,
+};
 use regex::Regex;
 use termion::color;
 
